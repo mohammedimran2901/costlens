@@ -1,0 +1,4 @@
+source-data/
+__pycache__/
+*.db
+data/ingest.log

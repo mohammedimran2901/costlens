@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CostLens — Cost drivers decomposition</title>
+<style>
+  :root{--ink:#1d1d1b;--red:#E4002B;--paper:#FCFAF7;--teal:#0F7B6C;--muted:#6b6b66;--line:#e5e1d8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Georgia,serif;background:var(--paper);color:var(--ink)}
+  header{background:var(--red);color:#fff;padding:10px 20px;font-family:Helvetica,Arial,sans-serif;display:flex;justify-content:space-between;align-items:center}
+  header h1{font-size:20px;margin:0}
+  header a{color:#fff;font-size:13px;text-decoration:none;opacity:.9}
+  .wrap{max-width:1060px;margin:0 auto;padding:24px 20px;font-family:Helvetica,Arial,sans-serif}
+  select{padding:10px 12px;font-size:15px;border:2px solid var(--ink);border-radius:4px}
+  .note{font-size:12px;color:var(--muted);margin:10px 0 18px;max-width:800px}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid var(--line)}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:normal;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .flag-high{color:var(--red);font-weight:bold}
+  .flag-low{color:var(--teal)}
+  .split{display:inline-flex;height:12px;width:170px;vertical-align:middle;border-radius:2px;overflow:hidden}
+  .split-a{background:#8ab8d8}.split-n{background:#c9c4b8}.split-e{background:var(--red)}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px 18px;display:inline-block;margin:0 12px 12px 0;min-width:190px}
+  .kpi b{font-size:22px;display:block}
+  .kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  footer{font-family:Helvetica,Arial,sans-serif;font-size:11px;color:var(--muted);padding:24px 20px;border-top:1px solid var(--line);margin-top:32px}
+</style>
+</head>
+<body>
+<header><h1>CostLens · Cost drivers</h1><span style="font-size:13px"><a href="index.html">Reference</a> · <a href="benchmark.html">Benchmarking</a></span></header>
+<div class="wrap">
+  <select id="org"></select>
+  <p class="note">2020/21 → 2024/25 decomposition for the trust's largest service lines. Each line's unit-cost change is split into the <b>national movement</b> (prices/casemix everyone faced) and the trust's <b>own divergence</b> — positive divergence means costs grew faster than the national trajectory. The £ column prices that divergence at current activity.</p>
+  <div id="kpis"></div>
+  <table id="tbl"></table>
+</div>
+<footer>Source: NHS England National Cost Collection organisation-level data (unadjusted), downloaded 10 Sep 2026. Demonstrator — verify against official publications before use.</footer>
+<script>
+const D = /*__DECOMP__*/{}, NAMES = /*__NAMES__*/{}, DESCS = /*__DESCS__*/{};
+const org = document.getElementById('org');
+org.innerHTML = Object.keys(D).sort().map(o=>`<option value="${o}">${o} — ${NAMES[o]||''}</option>`).join('');
+const gbp = n => '£' + Math.round(n).toLocaleString('en-GB');
+const pct = x => (x>0?'+':'') + (x*100).toFixed(0) + '%';
+const sign = n => (n>0?'+':'−') + '£' + Math.round(Math.abs(n)/100000)/10 + 'm';
+const mm = n => (n>0?'+':'−') + '£' + (Math.abs(n)/1000000).toFixed(1) + 'm';
+
+function render(){
+  const o = org.value;
+  const rows = Object.entries(D[o]).map(([c,v])=>({c, ...v}));
+  rows.sort((a,b)=>Math.abs(b.extra_cost_vs_nat)-Math.abs(a.extra_cost_vs_nat));
+  const tot = rows.reduce((a,r)=>a+r.extra_cost_vs_nat,0);
+  const nAdv = rows.filter(r=>r.extra_cost_vs_nat>100000).length;
+  const actTot = rows.reduce((a,r)=>a+r.act_chg*(r.cost1/(r.uc1*r.act1)),0)/rows.length;
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi"><b class="${tot>0?'flag-high':'flag-low'}">${mm(tot)}</b><span>Net annual cost vs national trajectory (top 80 lines)</span></div>
+     <div class="kpi"><b>${rows.filter(r=>r.extra_cost_vs_nat>0).length}</b><span>Lines above national trend</span></div>
+     <div class="kpi"><b>${nAdv}</b><span>Lines &gt;£100k/yr adverse</span></div>`;
+  document.getElementById('tbl').innerHTML =
+   `<tr><th>Code</th><th>Service</th><th class="num">Unit cost 20/21</th><th class="num">Unit cost 24/25</th><th class="num">Activity chg</th><th class="num">Trust chg</th><th class="num">National chg</th><th class="num">Divergence</th><th class="num">£/yr vs natl trend</th></tr>` +
+   rows.slice(0,40).map(r=>{
+     const adv = r.extra_cost_vs_nat>0;
+     const mag = Math.min(Math.abs(r.extra_cost_vs_nat)/1500000,1)*170;
+     return `<tr><td><b>${r.c}</b></td><td style="font-size:11px">${(DESCS[r.c]||'').slice(0,55)}</td>
+      <td class="num">${gbp(r.uc0)}</td><td class="num">${gbp(r.uc1)}</td>
+      <td class="num">${pct(r.act_chg)}</td><td class="num">${pct(r.own_chg)}</td><td class="num">${pct(r.nat_chg)}</td>
+      <td class="num ${r.eff_div>0.02?'flag-high':r.eff_div<-0.02?'flag-low':''}">${pct(r.eff_div)}</td>
+      <td class="num ${r.extra_cost_vs_nat>0?'flag-high':'flag-low'}">${sign(r.extra_cost_vs_nat)} <span class="split"><i class="split-e" style="width:${mag}px"></i></span></td></tr>`;
+   }).join('');
+}
+org.onchange = render; org.value = org.options[0].value; render();
+</script>
+</body>
+</html>

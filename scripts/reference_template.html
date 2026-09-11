@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CostLens — NHS National Cost Collection reference</title>
+<meta property="og:title" content="CostLens — NHS unit costs, 5-year trends">
+<meta property="og:description" content="Search any NHS service currency: national average unit cost, activity and 5-year trend from the National Cost Collection. Free.">
+<style>
+  :root{--ink:#1d1d1b;--red:#E4002B;--paper:#FCFAF7;--teal:#0F7B6C;--muted:#6b6b66;--line:#e5e1d8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Georgia,'Times New Roman',serif;background:var(--paper);color:var(--ink)}
+  header{background:var(--red);color:#fff;padding:10px 20px;font-family:Helvetica,Arial,sans-serif;display:flex;justify-content:space-between;align-items:center}
+  header h1{font-size:20px;margin:0;letter-spacing:.5px}
+  header span{font-size:12px;opacity:.9}
+  .wrap{max-width:960px;margin:0 auto;padding:24px 20px}
+  .lede{font-size:15px;color:var(--muted);margin:14px 0 20px;font-family:Helvetica,Arial,sans-serif}
+  #q{width:100%;padding:14px 16px;font-size:17px;border:2px solid var(--ink);border-radius:4px;font-family:Helvetica,Arial,sans-serif}
+  .stat{font-family:Helvetica,Arial,sans-serif;font-size:12px;color:var(--muted);margin-top:8px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px;margin-top:16px}
+  .code{font-family:Helvetica,Arial,sans-serif;font-weight:bold;font-size:15px}
+  .desc{font-size:14px;margin:4px 0 12px;color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-family:Helvetica,Arial,sans-serif;font-size:13px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:normal;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .bar{display:inline-block;height:10px;background:var(--teal);border-radius:2px;vertical-align:middle}
+  .delta{font-family:Helvetica,Arial,sans-serif;font-size:12px}
+  .up{color:var(--red)}.down{color:var(--teal)}
+  footer{font-family:Helvetica,Arial,sans-serif;font-size:11px;color:var(--muted);padding:24px 20px;border-top:1px solid var(--line);margin-top:32px}
+  .hit{padding:8px 4px;border-bottom:1px solid var(--line);cursor:pointer;font-family:Helvetica,Arial,sans-serif;font-size:14px}
+  .hit:hover{background:#f4f1ea}
+  .hit b{font-family:Helvetica,Arial,sans-serif}
+  .hit small{color:var(--muted)}
+</style>
+</head>
+<body>
+<header><h1>CostLens</h1><span><a style="color:#fff;font-size:13px;text-decoration:none;opacity:.9" href="benchmark.html">Trust benchmarking →</a> · <a style="color:#fff;font-size:13px;text-decoration:none;opacity:.9" href="drivers.html">Cost drivers →</a> &nbsp; NHS NCC · 2020/21–2024/25</span></header>
+<div class="wrap">
+  <p class="lede">Search any NHS service currency (HRG4+, outpatient, imaging, community, mental health) to see the national average unit cost, activity and five-year trend — built entirely from published NHS England National Cost Collection data.</p>
+  <input id="q" placeholder="Search by code (e.g. HN90B) or description (e.g. hip replacement)…" autocomplete="off">
+  <div class="stat" id="stat"></div>
+  <div id="hits"></div>
+  <div id="detail"></div>
+</div>
+<footer>
+  Source: NHS England National Cost Collection, organisation-level source data (unadjusted), downloaded 10 Sep 2026. National unit costs are activity-weighted averages across submitting providers. Suppressed submissions are excluded. Reference tool only — not affiliated with NHS England.
+</footer>
+<script>
+const DATA = /*__DATA__*/{};
+const YEARS = ["2020/21","2021/22","2022/23","2023/24","2024/25"];
+const q = document.getElementById('q'), hits = document.getElementById('hits'),
+      detail = document.getElementById('detail'), stat = document.getElementById('stat');
+
+function fmt(n){ return n==null ? '—' : '£' + n.toLocaleString('en-GB',{maximumFractionDigits: n<100?2:0}); }
+
+function render(item){
+  const t = DATA.trend[item.c] || {};
+  const yrs = YEARS.filter(y=>t[y]);
+  const first = t[yrs[0]], last = t[yrs[yrs.length-1]];
+  const chg = first && last ? (last.unit_cost/first.unit_cost-1)*100 : null;
+  const maxA = Math.max(...yrs.map(y=>t[y].activity));
+  let rows = yrs.map(y=>{
+    const a = t[y].activity, u = t[y].unit_cost;
+    const w = Math.round(a/maxA*160);
+    return `<tr><td>${y}</td><td class="num">${fmt(u)}</td><td class="num">${a.toLocaleString()}</td><td><span class="bar" style="width:${w}px"></span></td></tr>`;
+  }).join('');
+  const chgTxt = chg==null?'':`<span class="delta ${chg>0?'up':'down'}">${chg>0?'▲':'▼'} ${Math.abs(chg).toFixed(1)}% over 5 years</span>`;
+  detail.innerHTML = `<div class="card"><div class="code">${item.c}</div><div class="desc">${item.d}</div>${chgTxt}
+  <table><tr><th>Year</th><th style="text-align:right">National avg unit cost</th><th style="text-align:right">Activity</th><th>Relative volume</th></tr>${rows}</table></div>`;
+  detail.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function search(){
+  const v = q.value.trim().toLowerCase();
+  if(v.length < 2){ hits.innerHTML=''; stat.textContent=''; return; }
+  const toks = v.split(/\s+/);
+  const out = [];
+  for(const c in DATA.desc){
+    const d = DATA.desc[c];
+    const hay = (c + ' ' + d).toLowerCase();
+    const matched = toks.filter(t => hay.includes(t)).length;
+    if(matched > 0){
+      const idx = d.toLowerCase().indexOf(toks[0]);
+      // earlier tokens (the primary noun, e.g. "hip") weigh more than later ones
+      let w = 0;
+      toks.forEach((t, ti) => { if (hay.includes(t)) w += (toks.length - ti); });
+      out.push({c, d, score: w * 100 - (c.toLowerCase().startsWith(toks[0]) ? 0 : 1 + idx/1000)});
+    }
+    if(out.length > 60) break;
+  }
+  out.sort((a,b)=>b.score-a.score);
+  const all = out.length && Math.min(...out.map(o=>o.score)) >= 100 * toks.length;
+  stat.textContent = `${out.length} match${out.length===1?'':'es'} · showing top ${Math.min(out.length,12)}${all?'':' (partial)'}`;
+  hits.innerHTML = out.slice(0,12).map(o=>`<div class="hit" data-c="${o.c}"><b>${o.c}</b> — ${o.d}</div>`).join('');
+  hits.querySelectorAll('.hit').forEach(el=>el.onclick=()=>render({c:el.dataset.c, d:DATA.desc[el.dataset.c]}));
+  if(out.length) render(out[0]);
+}
+q.addEventListener('input', search);
+</script>
+</body>
+</html>
