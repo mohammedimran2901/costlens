@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CostLens — CFO board view</title>
+<style>
+  :root{--ink:#1d1d1b;--red:#E4002B;--paper:#FCFAF7;--teal:#0F7B6C;--muted:#6b6b66;--line:#e5e1d8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--paper);color:var(--ink)}
+  header{background:var(--red);color:#fff;padding:10px 20px;display:flex;justify-content:space-between;align-items:center}
+  header h1{font-size:20px;margin:0}
+  header nav a{color:#fff;font-size:13px;text-decoration:none;opacity:.9;margin-left:14px}
+  .wrap{max-width:1060px;margin:0 auto;padding:24px 20px}
+  select{padding:10px 12px;font-size:15px;border:2px solid var(--ink);border-radius:4px}
+  .badge{display:inline-block;background:var(--teal);color:#fff;font-size:11px;padding:3px 9px;border-radius:10px;margin-left:10px;vertical-align:middle}
+  .kpis{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px 18px;min-width:170px}
+  .kpi b{font-family:Georgia,serif;font-size:22px;display:block}
+  .kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .se{font-size:11px;color:var(--muted);font-weight:normal}
+  h3{font-family:Georgia,serif;font-size:19px;margin:28px 0 10px}
+  .chart{background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px 20px 8px}
+  .bars{display:flex;gap:6px;align-items:flex-end;height:150px;padding:0 4px}
+  .bar{flex:1;background:var(--teal);border-radius:3px 3px 0 0;position:relative}
+  .bar.fc{background:repeating-linear-gradient(45deg,#8fd0c6,#8fd0c6 4px,#0F7B6C 4px,#0F7B6C 8px)}
+  .bar span{position:absolute;top:-20px;left:0;right:0;text-align:center;font-size:11px;color:var(--muted)}
+  .xlab{display:flex;gap:6px;padding:6px 4px 10px;border-top:1px solid var(--line)}
+  .xlab div{flex:1;text-align:center;font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid var(--line)}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:normal;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .flag-high{color:var(--red);font-weight:bold}
+  .flag-low{color:var(--teal)}
+  .note{font-size:12px;color:var(--muted);margin:8px 0 16px;max-width:760px}
+  footer{font-size:11px;color:var(--muted);padding:24px 20px;border-top:1px solid var(--line);margin-top:32px}
+</style>
+</head>
+<body>
+<header><h1>CostLens · CFO board view</h1><nav><a href="index.html">Home</a><a href="reference.html">Reference</a><a href="benchmark.html">Benchmarking</a><a href="drivers.html">Cost drivers</a></nav></header>
+<div class="wrap">
+  <select id="org"></select><span class="badge" id="grp"></span>
+  <div class="kpis" id="kpis"></div>
+  <h3>Total cost, 5 years + projection</h3>
+  <div class="chart"><div class="bars" id="bars"></div><div class="xlab" id="xlab"></div></div>
+  <p class="note">Projection: linear trend over 2020/21–2024/25 (dashed). A simple directional estimate, not a plan — sensitive to the post-COVID distortion in 2020/21.</p>
+  <h3>Board concerns — lines diverging from the national trajectory</h3>
+  <p class="note">Unit-cost growth vs what the whole NHS experienced for the same service. The £ column prices your divergence at current activity: what this line would have cost if you had tracked the national trend.</p>
+  <table id="concerns"></table>
+  <h3>Peer benchmarking — similar-size trusts</h3>
+  <p class="note">Unit costs vs the peer-group median (trusts in the same size quartile). "Gap" is your unit cost vs theirs on your largest service lines.</p>
+  <table id="peers"></table>
+</div>
+<footer>Source: NHS England National Cost Collection organisation-level source data (unadjusted), 2020/21–2024/25, downloaded 10 Sep 2026. Peer groups: activity quartiles across 211 trusts. Demonstrator — verify against official publications before board use.</footer>
+<script>
+const CFO = /*__CFO__*/{}, NAMES = /*__NAMES__*/{}, DESCS = /*__DESCS__*/{}, YEARS = ["2020/21","2021/22","2022/23","2023/24","2024/25"];
+const GBP_ = n => '£' + (n/1e9 >= 1 ? (n/1e9).toFixed(2)+'bn' : n/1e6 >= 1 ? (n/1e6).toFixed(1)+'m' : Math.round(n).toLocaleString('en-GB'));
+const org = document.getElementById('org');
+org.innerHTML = Object.keys(CFO.orgs).sort().map(o=>`<option value="${o}">${o} — ${NAMES[o]||''}</option>`).join('');
+
+function render(){
+  const d = CFO.orgs[org.value];
+  document.getElementById('grp').textContent = d.group + ' trust · ' + CFO.groups[d.group].length + ' peers';
+  const c1 = d.cost['2024/25'], c0 = d.cost['2020/21'];
+  const cagr = Math.pow(c1/c0, 1/4)-1;
+  const fc = d.fc_cost;
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi"><b>${GBP_(c1)}</b><span>2024/25 total cost (submitted lines)</span></div>
+     <div class="kpi"><b>${cagr>0?'+':''}${(cagr*100).toFixed(1)}%</b><span>cost CAGR since 2020/21</span></div>
+     <div class="kpi"><b class="${fc[0]>c1*1.02?'flag-high':fc[0]<c1*0.98?'flag-low':''}">${GBP_(fc[0])}</b><span>2025/26 projection <span class="se">±${GBP_(fc[1])}</span></span></div>
+     <div class="kpi"><b>${d.concerns.filter(x=>x.extra>0).length}</b><span>lines above national trend</span></div>`;
+  const all = [...YEARS.map(y=>({v:d.cost[y], y, fc:false})), {v:fc[0], y:'2025/26p', fc:true}];
+  const mx = Math.max(...all.map(a=>a.v));
+  document.getElementById('bars').innerHTML = all.map(a=>
+    `<div class="bar ${a.fc?'fc':''}" style="height:${Math.max(a.v/mx*100,2)}%"><span>${GBP_(a.v)}</span></div>`).join('');
+  document.getElementById('xlab').innerHTML = all.map(a=>`<div>${a.y}</div>`).join('');
+  document.getElementById('concerns').innerHTML =
+   `<tr><th>Code</th><th>Service</th><th class="num">Unit cost 24/25</th><th class="num">Trust chg</th><th class="num">NHS chg</th><th class="num">2025/26 forecast</th><th class="num">£/yr vs national</th></tr>` +
+   d.concerns.map(r=>`<tr><td><b>${r.c}</b></td><td style="font-size:11px">${(DESCS[r.c]||'').slice(0,52)}</td>
+     <td class="num">£${r.uc.toLocaleString('en-GB',{maximumFractionDigits:r.uc<100?2:0})}</td>
+     <td class="num">${(r.own>0?'+':'')+(r.own*100).toFixed(0)}%</td>
+     <td class="num">${(r.nat>0?'+':'')+(r.nat*100).toFixed(0)}%</td>
+     <td class="num">£${r.f.toLocaleString('en-GB',{maximumFractionDigits:r.f<100?2:0})} <span class="se">±${(r.se*100/r.f).toFixed(0)}%</span></td>
+     <td class="num ${r.extra>0?'flag-high':'flag-low'}">${r.extra>0?'+':'-'  }${GBP_(Math.abs(r.extra)).slice(1)}</td></tr>`).join('');
+  document.getElementById('peers').innerHTML =
+   `<tr><th>Code</th><th>Service</th><th class="num">Your unit cost</th><th class="num">Peer median</th><th class="num">Gap</th><th class="num">Activity</th><th class="num">Forecast 25/26</th></tr>` +
+   d.peers.map(r=>`<tr><td><b>${r.c}</b></td><td style="font-size:11px">${(DESCS[r.c]||'').slice(0,52)}</td>
+     <td class="num">£${r.uc.toLocaleString('en-GB',{maximumFractionDigits:r.uc<100?2:0})}</td>
+     <td class="num">£${r.peer.toLocaleString('en-GB',{maximumFractionDigits:r.peer<100?2:0})}</td>
+     <td class="num ${r.gap>0.05?'flag-high':r.gap<-0.05?'flag-low':''}">${(r.gap>0?'+':'')+(r.gap*100).toFixed(0)}%</td>
+     <td class="num">${r.act.toLocaleString()}</td>
+     <td class="num">${r.f?'£'+r.f.toLocaleString('en-GB',{maximumFractionDigits:r.f<100?2:0}):'—'}</td></tr>`).join('');
+}
+org.onchange = render; org.value = org.options[0].value; render();
+</script>
+</body>
+</html>

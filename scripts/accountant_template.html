@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CostLens — Efficiency workspace</title>
+<style>
+  :root{--ink:#1d1d1b;--red:#E4002B;--paper:#FCFAF7;--teal:#0F7B6C;--muted:#6b6b66;--line:#e5e1d8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--paper);color:var(--ink)}
+  header{background:var(--red);color:#fff;padding:10px 20px;display:flex;justify-content:space-between;align-items:center}
+  header h1{font-size:20px;margin:0}
+  header nav a{color:#fff;font-size:13px;text-decoration:none;opacity:.9;margin-left:14px}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px}
+  select{padding:10px 12px;font-size:15px;border:2px solid var(--ink);border-radius:4px}
+  .kpis{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px 18px;min-width:180px}
+  .kpi b{font-family:Georgia,serif;font-size:22px;display:block}
+  .kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  h3{font-family:Georgia,serif;font-size:19px;margin:26px 0 10px}
+  .note{font-size:12px;color:var(--muted);margin:8px 0 16px;max-width:800px}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid var(--line)}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:normal;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .flag-high{color:var(--red);font-weight:bold}
+  .bar{display:inline-block;height:10px;background:var(--red);border-radius:2px;vertical-align:middle}
+  .barok{background:var(--teal)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  footer{font-size:11px;color:var(--muted);padding:24px 20px;border-top:1px solid var(--line);margin-top:32px}
+</style>
+</head>
+<body>
+<header><h1>CostLens · Efficiency workspace</h1><nav><a href="index.html">Home</a><a href="reference.html">Reference</a><a href="benchmark.html">Benchmarking</a><a href="drivers.html">Cost drivers</a></nav></header>
+<div class="wrap">
+  <select id="org"></select>
+  <div class="kpis" id="kpis"></div>
+  <h3>Efficiency watchlist — where to dig first</h3>
+  <p class="note">Your largest service lines ranked by the £ value of closing the gap to the <b>efficient quartile</b> (25th percentile of all submitting trusts, unadjusted). Trend shows your 5-year unit-cost change vs the national movement for the same line. Start with big £ and red trend.</p>
+  <table id="watch"></table>
+  <p class="hint">Suppressed submissions are excluded; lines with fewer than 5 submitting trusts are omitted. Unit costs are unadjusted — apply your MFF when comparing across regions.</p>
+</div>
+<footer>Source: NHS England National Cost Collection organisation-level source data (unadjusted), 2020/21–2024/25, downloaded 10 Sep 2026. Demonstrator — verify against official publications before operational use.</footer>
+<script>
+const D = /*__DECOMP__*/{}, P = /*__PCTL__*/{}, NAMES = /*__NAMES__*/{}, DESCS = /*__DESCS__*/{};
+const gbp = n => n>=1e6 ? '£'+(n/1e6).toFixed(1)+'m' : '£'+Math.round(n).toLocaleString('en-GB');
+const pct = x => (x>0?'+':'') + (x*100).toFixed(0) + '%';
+const org = document.getElementById('org');
+org.innerHTML = Object.keys(D).sort().map(o=>`<option value="${o}">${o} — ${NAMES[o]||''}</option>`).join('');
+
+function render(){
+  const rows = [];
+  for (const c in D[org.value]) {
+    const r = D[org.value][c];
+    const st = (P[c]||{})['2024/25'];
+    if (!st || !r.uc1) continue;
+    const opp = (r.uc1 - st.p25) * r.act1;
+    rows.push({c, uc1:r.uc1, act1:r.act1, p25:st.p25, p50:st.p50, opp, eff_div:r.eff_div, own:r.own_chg, nat:r.nat_chg});
+  }
+  rows.sort((a,b)=>b.opp-a.opp);
+  const positive = rows.filter(r=>r.opp>0);
+  const tot = positive.reduce((a,r)=>a+r.opp,0);
+  const top10 = positive.slice(0,10).reduce((a,r)=>a+r.opp,0);
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi"><b class="flag-high">${gbp(tot)}</b><span>gross efficiency headroom vs p25 (all lines)</span></div>
+     <div class="kpi"><b>${gbp(top10)}</b><span>headroom in the top 10 lines alone</span></div>
+     <div class="kpi"><b>${positive.length}</b><span>lines above efficient quartile</span></div>
+     <div class="kpi"><b>${positive.filter(r=>r.own>r.nat).length}</b><span>also drifting vs national trend</span></div>`;
+  const mx = Math.max(...rows.map(r=>Math.abs(r.opp)));
+  document.getElementById('watch').innerHTML =
+   `<tr><th>Code</th><th>Service</th><th class="num">Your unit cost</th><th class="num">p25 target</th><th class="num">Median</th><th class="num">Your chg vs NHS</th><th>Opportunity</th><th class="num">£/yr to p25</th></tr>` +
+   rows.slice(0,30).map(r=>{
+     const w = Math.abs(r.opp)/mx*140;
+     const adverse = r.own > r.nat;
+     return `<tr><td><b>${r.c}</b></td><td style="font-size:11px">${(DESCS[r.c]||'').slice(0,55)}</td>
+      <td class="num">£${r.uc1.toLocaleString('en-GB',{maximumFractionDigits:r.uc1<100?2:0})}</td>
+      <td class="num">£${r.p25.toLocaleString('en-GB',{maximumFractionDigits:r.p25<100?2:0})}</td>
+      <td class="num">£${r.p50.toLocaleString('en-GB',{maximumFractionDigits:r.p50<100?2:0})}</td>
+      <td class="num ${adverse?'flag-high':''}">${pct(r.own)} / ${pct(r.nat)}</td>
+      <td><span class="bar ${r.opp<=0?'barok':''}" style="width:${w}px"></span></td>
+      <td class="num ${r.opp>0?'flag-high':'flag-low'}">${r.opp>0?'':'−'}${gbp(Math.abs(r.opp)).slice(1)}</td></tr>`;
+   }).join('');
+}
+org.onchange = render; org.value = org.options[0].value; render();
+</script>
+</body>
+</html>
