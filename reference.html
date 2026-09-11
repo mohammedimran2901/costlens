@@ -7,6 +7,13 @@
 <meta property="og:title" content="CostLens — NHS unit costs, 5-year trends">
 <meta property="og:description" content="Search any NHS service currency: national average unit cost, activity and 5-year trend from the National Cost Collection. Free.">
 <style>
+  .mast{border-bottom:4px solid var(--red)}
+  .mast-in{max-width:1080px;margin:0 auto;display:flex;justify-content:space-between;align-items:baseline;padding:14px 24px 12px;flex-wrap:wrap}
+  .logo{font-family:Georgia,serif;font-size:26px;font-weight:bold;letter-spacing:-.5px;text-decoration:none;color:var(--ink)}
+  .logo em{color:var(--red);font-style:normal}
+  nav.mn a{color:var(--ink);text-decoration:none;font-size:13.5px;margin-left:18px}
+  nav.mn a:hover{color:var(--red)}
+  .topbar{height:8px;background:var(--red)}
   :root{--ink:#1d1d1b;--red:#E4002B;--paper:#FCFAF7;--teal:#0F7B6C;--muted:#6b6b66;--line:#e5e1d8}
   *{box-sizing:border-box}
   body{margin:0;font-family:Georgia,'Times New Roman',serif;background:var(--paper);color:var(--ink)}
@@ -35,7 +42,12 @@
 </style>
 </head>
 <body>
-<header><h1>CostLens</h1><span><a style="color:#fff;font-size:13px;text-decoration:none;opacity:.9" href="index.html">Home</a> · <a style="color:#fff;font-size:13px;text-decoration:none;opacity:.9" href="benchmark.html">Benchmarking →</a> · <a style="color:#fff;font-size:13px;text-decoration:none;opacity:.9" href="drivers.html">Cost drivers →</a> &nbsp; NHS NCC · 2020/21–2024/25</span></header>
+<div class="topbar"></div>
+<div class="mast"><div class="mast-in">
+  <a class="logo" href="index.html">Cost<em>Lens</em></a>
+  <nav class="mn"><a href="reference.html">Reference</a><a href="benchmark.html">Benchmarking</a><a href="drivers.html">Cost drivers</a><a href="accountant.html">Cost accountants</a><a href="cfo.html">CFOs</a><a href="index.html#pricing">Pricing</a></nav>
+</div></div>
+
 <div class="wrap">
   <p class="lede">Search any NHS service currency (HRG4+, outpatient, imaging, community, mental health) to see the national average unit cost, activity and five-year trend — built entirely from published NHS England National Cost Collection data.</p>
   <input id="q" placeholder="Search by code (e.g. HN90B) or description (e.g. hip replacement)…" autocomplete="off">

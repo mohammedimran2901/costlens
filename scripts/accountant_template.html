@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CostLens — Efficiency workspace</title>
 <style>
+  .mast{border-bottom:4px solid var(--red)}
+  .mast-in{max-width:1080px;margin:0 auto;display:flex;justify-content:space-between;align-items:baseline;padding:14px 24px 12px;flex-wrap:wrap}
+  .logo{font-family:Georgia,serif;font-size:26px;font-weight:bold;letter-spacing:-.5px;text-decoration:none;color:var(--ink)}
+  .logo em{color:var(--red);font-style:normal}
+  nav.mn a{color:var(--ink);text-decoration:none;font-size:13.5px;margin-left:18px}
+  nav.mn a:hover{color:var(--red)}
+  .topbar{height:8px;background:var(--red)}
   :root{--ink:#1d1d1b;--red:#E4002B;--paper:#FCFAF7;--teal:#0F7B6C;--muted:#6b6b66;--line:#e5e1d8}
   *{box-sizing:border-box}
   body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--paper);color:var(--ink)}
@@ -31,7 +38,12 @@
 </style>
 </head>
 <body>
-<header><h1>CostLens · Efficiency workspace</h1><nav><a href="index.html">Home</a><a href="reference.html">Reference</a><a href="benchmark.html">Benchmarking</a><a href="drivers.html">Cost drivers</a></nav></header>
+<div class="topbar"></div>
+<div class="mast"><div class="mast-in">
+  <a class="logo" href="index.html">Cost<em>Lens</em></a>
+  <nav class="mn"><a href="reference.html">Reference</a><a href="benchmark.html">Benchmarking</a><a href="drivers.html">Cost drivers</a><a href="accountant.html">Cost accountants</a><a href="cfo.html">CFOs</a><a href="index.html#pricing">Pricing</a></nav>
+</div></div>
+
 <div class="wrap">
   <select id="org"></select>
   <div class="kpis" id="kpis"></div>
