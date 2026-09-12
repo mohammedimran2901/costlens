@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CostLens — Trust benchmarking</title>
 <style>
+    .selrow{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+  .selrow label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+  .selrow .grow{flex:1;min-width:300px}
+  #peerpick{max-width:100%}
+  #chips{margin-top:8px}
+  .chip{display:inline-block;background:#fff;border:1px solid var(--teal);color:var(--ink);border-radius:12px;padding:4px 10px;font-size:12px;margin:0 8px 6px 0}
+  .chip b{cursor:pointer;color:var(--red);margin-left:6px;font-weight:bold}
+  .hint{font-size:11.5px;color:var(--muted)}
+  .dim{color:#c9c4b8}
+  .tiny{font-size:10px;font-weight:normal;color:var(--muted)}
   .mast{border-bottom:4px solid var(--red)}
   .mast-in{max-width:1080px;margin:0 auto;display:flex;justify-content:space-between;align-items:baseline;padding:14px 24px 12px;flex-wrap:wrap}
   .logo{font-family:Georgia,serif;font-size:26px;font-weight:bold;letter-spacing:-.5px;text-decoration:none;color:var(--ink)}
@@ -45,8 +55,11 @@
 </div></div>
 
 <div class="wrap">
-  <select id="org"></select>
-  <p class="note">Unit costs from the organisation's own National Cost Collection submissions vs the spread across all submitting trusts (p25 = efficient quartile). Suppressed submissions excluded. MFF not applied (unadjusted data).</p>
+  <div class="selrow">
+    <div><label>Your trust</label><select id="org"></select></div>
+    <div class="grow"><label>Compare against (click to add, click chip to remove)</label><select id="peerpick"></select><div id="chips"></div></div>
+  </div>
+  <p class="note">Unit costs from each organisation's own National Cost Collection submissions, vs the spread across all submitting trusts (p25 = efficient quartile). Suppressed submissions excluded. MFF not applied (unadjusted data). Peer columns are greyed where that peer doesn't submit the line.</p>
   <div class="kpis" id="kpis"></div>
   <table id="tbl"></table>
 </div>
@@ -54,45 +67,66 @@
 <script>
 const B = /*__BENCH__*/{}, P = /*__PCTL__*/{}, NAMES = /*__NAMES__*/{}, DESCS = /*__DESCS__*/{};
 const YEARS = ["2020/21","2021/22","2022/23","2023/24","2024/25"];
-const org = document.getElementById('org');
-org.innerHTML = Object.keys(B).sort().map(o=>`<option value="${o}">${o} — ${NAMES[o]||''}</option>`).join('');
-const fmt = n => n==null?'—':'£'+n.toLocaleString('en-GB',{maximumFractionDigits: n<100?2:0});
+const org = document.getElementById('org'), peerpick = document.getElementById('peerpick'), chips = document.getElementById('chips');
+const opts = Object.keys(B).sort().map(o=>`<option value="${o}">${o} — ${NAMES[o]||''}</option>`).join('');
+org.innerHTML = opts; peerpick.innerHTML = opts;
+const fmt = n => n==null||n===undefined?'—':'£'+n.toLocaleString('en-GB',{maximumFractionDigits: n<100?2:0});
+let peers = [];
+
+function drawChips(){
+  chips.innerHTML = peers.map(p=>`<span class="chip">${p} · ${(NAMES[p]||'').slice(0,26)}<b data-p="${p}">×</b></span>`).join('') || '<span class="hint">No peers selected — comparing vs national median &amp; p25 only.</span>';
+  chips.querySelectorAll('b').forEach(b=>b.onclick=e=>{peers=peers.filter(x=>x!==b.dataset.p);drawChips();render();});
+}
+peerpick.onchange = () => {
+  const v = peerpick.value;
+  if(v && v!==org.value && !peers.includes(v) && peers.length<4){ peers.push(v); drawChips(); render(); }
+  peerpick.selectedIndex = -1;
+};
 
 function render(){
   const o = org.value;
   const rows = [];
-  let totAct=0, totGap=0, nGap=0;
   for(const c in B[o]){
-    const y = '2024/25', s = (B[o][c]||{})[y]; if(!s) continue;
-    const st = (P[c]||{})[y]; if(!st) continue;
+    const s = (B[o][c]||{})['2024/25']; if(!s) continue;
+    const st = (P[c]||{})['2024/25']; if(!st) continue;
+    const pvals = peers.map(p=>{ const ps=(B[p]&&B[p][c]&&B[p][c]['2024/25']); return ps?{p, uc:ps.uc, act:ps.act}:null; });
     const gap = (s.uc/st.p50-1)*100;
-    rows.push({c, d: DESCS[c]||'', uc:s.uc, act:s.act, p25:st.p25, p50:st.p50, n:st.n, gap, series:B[o][c]});
-    totAct += s.act; if(Math.abs(gap)>2){ totGap += gap*s.act; nGap += s.act; }
+    rows.push({c, d: DESCS[c]||'', uc:s.uc, act:s.act, p25:st.p25, p50:st.p50, n:st.n, gap, series:B[o][c], pvals});
   }
   rows.sort((a,b)=>b.act-a.act);
-  const wGap = nGap ? totGap/nGap : 0;
+  let totAct=0, totGap=0, nGap=0;
+  rows.forEach(r=>{ totAct+=r.act; if(Math.abs(r.gap)>2){ totGap+=r.gap*r.act; nGap+=r.act; } });
+  const wGap = nGap?totGap/nGap:0;
   const above = rows.filter(r=>r.gap>2).length;
+  const peerNames = peers.map(p=>`<div class="kpi"><b>${p}</b><span>peer</span></div>`).join('');
   document.getElementById('kpis').innerHTML =
-    `<div class="kpi"><b>${fmt(rows.reduce((a,r)=>a+r.uc*r.act,0))}</b><span>Cost of top-60 service lines (2024/25)</span></div>
-     <div class="kpi"><b>${rows.length}</b><span>Service lines benchmarked</span></div>
-     <div class="kpi"><b class="${wGap>2?'flag-high':wGap<-2?'flag-low':''}">${wGap>0?'+':''}${wGap.toFixed(1)}%</b><span>Activity-weighted gap vs national median</span></div>
-     <div class="kpi"><b>${above}</b><span>Lines &gt;2% above median</span></div>`;
-  const maxUC = Math.max(...rows.map(r=>r.uc));
-  document.getElementById('tbl').innerHTML =
-   `<tr><th>Code</th><th>Service</th><th class="num">Trust unit cost</th><th class="num">National p25</th><th class="num">Median</th><th>Position</th><th class="num">Gap</th><th class="num">Activity</th><th class="num">Submissions</th><th class="num">5yr trend</th></tr>` +
-   rows.map(r=>{
-     const w = r.uc/maxUC*150;
-     const med = r.p50/maxUC*150;
-     const tr = YEARS.map(y=>r.series[y]&&(r.series[y].uc)).filter(x=>x);
-     const trt = tr.length>1 ? ((tr[tr.length-1]/tr[0]-1)*100).toFixed(0)+'%' : '—';
-     return `<tr><td><b>${r.c}</b></td><td style="font-size:11px">${r.d.slice(0,60)}</td>
-       <td class="num">${fmt(r.uc)}</td><td class="num">${fmt(r.p25)}</td><td class="num">${fmt(r.p50)}</td>
-       <td><span class="vs"><i style="width:${w}px"></i><b style="left:${med}px"></b></span></td>
-       <td class="num ${r.gap>2?'flag-high':r.gap<-2?'flag-low':''}">${r.gap>0?'+':''}${r.gap.toFixed(0)}%</td>
-       <td class="num">${r.act.toLocaleString()}</td><td class="num">${r.n}</td><td class="num">${trt}</td></tr>`;
-   }).join('');
+    `<div class="kpi"><b>${fmt(rows.reduce((a,r)=>a+r.uc*r.act,0))}</b><span>cost of top service lines (2024/25)</span></div>
+     <div class="kpi"><b>${rows.length}</b><span>service lines benchmarked</span></div>
+     <div class="kpi"><b class="${wGap>2?'flag-high':wGap<-2?'flag-low':''}">${wGap>0?'+':''}${wGap.toFixed(1)}%</b><span>vs national median</span></div>
+     <div class="kpi"><b>${above}</b><span>lines &gt;2% above median</span></div>` + peerNames;
+  const head = `<tr><th>Code</th><th>Service</th><th class="num">${o}</th>${peers.map(p=>`<th class="num">${p}</th>`).join('')}<th class="num">Median</th><th class="num">p25</th><th>Position</th><th class="num">Gap</th><th class="num">Activity</th><th class="num">5yr trend</th></tr>`;
+  document.getElementById('tbl').innerHTML = head + rows.slice(0,30).map(r=>{
+    const w = r.uc/Math.max(...rows.map(x=>x.uc))*140;
+    const med = r.p50/Math.max(...rows.map(x=>x.uc))*140;
+    const tr = YEARS.map(y=>r.series[y]&&r.series[y].uc).filter(x=>x);
+    const trt = tr.length>1?((tr[tr.length-1]/tr[0]-1)*100).toFixed(0)+'%':'—';
+    const pcells = peers.map(p=>{
+      const pv = r.pvals.find(x=>x&&x.p===p);
+      if(!pv) return '<td class="num dim">—</td>';
+      const g = (pv.uc/r.uc-1)*100;
+      const cls = g<-2?'flag-low':g>2?'flag-high':'';
+      return `<td class="num">${fmt(pv.uc)} <span class="tiny ${cls}">${g>0?'+':''}${g.toFixed(0)}%</span></td>`;
+    }).join('');
+    return `<tr><td><b>${r.c}</b></td><td style="font-size:11px">${r.d.slice(0,55)}</td>
+      <td class="num"><b>${fmt(r.uc)}</b></td>${pcells}
+      <td class="num">${fmt(r.p50)}</td><td class="num">${fmt(r.p25)}</td>
+      <td><span class="vs"><i style="width:${w}px"></i><b style="left:${med}px"></b></span></td>
+      <td class="num ${r.gap>2?'flag-high':r.gap<-2?'flag-low':''}">${r.gap>0?'+':''}${r.gap.toFixed(0)}%</td>
+      <td class="num">${r.act.toLocaleString()}</td><td class="num">${trt}</td></tr>`;
+  }).join('');
 }
-org.onchange = render; org.value = org.options[0].value; render();
+org.onchange = () => { peers = peers.filter(p=>p!==org.value); drawChips(); render(); };
+peers = []; drawChips(); org.value = org.options[0].value; render();
 </script>
 </body>
 </html>
